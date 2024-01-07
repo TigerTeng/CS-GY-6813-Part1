@@ -1,0 +1,83 @@
+TYPE="type"
+ARGS="args"
+RETURN="return"
+EXCP="exceptions"
+TARGET="target"
+FUNC="func"
+OBJC="objc"
+
+class ABFile():
+  def __init__(self,filename,create):
+    # globals
+    mycontext['debug'] = False
+    # local (per object) reference to the underlying file
+    self.Afn = filename+'.a'
+    self.Bfn = filename+'.b'
+
+    # make the files and add 'SE' to the readat file...
+    if create:
+      self.Afile = openfile(self.Afn,create)
+      self.Bfile = openfile(self.Bfn,create)
+      self.Afile.writeat('SE',0)
+    # create is False
+    else:
+      self.Afile = openfile(self.Afn,False)
+      #removefile(self.Bfn)
+      self.Bfile = openfile(self.Bfn,True)
+
+  def writeat(self,data,offset):
+    self.lock = createlock()
+    self.lock.acquire(True)
+    if (offset >= 0 and offset < len(self.Bfile.readat(None,0))):
+    # Write the requested data to the B file using the sandbox's writeat call
+      self.Bfile.writeat(data,offset)
+    self.lock.release()
+
+  def readat(self,bytes,offset):
+    # Read from the A file using the sandbox's readat...
+    self.lock = createlock()
+    self.lock.acquire(True)
+    output = ""
+    if (offset >= 0 and offset < len(self.Bfile.readat(None,0))):
+      output = self.Afile.readat(bytes,offset)
+    self.lock.release()
+    return output
+
+  def close(self):
+    #log(self.Bfile.readat(1,0))
+    #log(self.Bfile.readat(1,len(self.Bfile.readat(None,0))-1))
+
+    # Determine if Bfile starts with S and ends with E.
+    # If it does, write Bfile to Afile.
+    if('S' == self.Bfile.readat(1,0)):
+      if('E' == self.Bfile.readat(1,len(self.Bfile.readat(None,0))-1)):
+        #log(self.Bfile.readat(None,0))
+        self.Afile.writeat(self.Bfile.readat(None,0),0)
+      #else:
+        #log("FAIL\n")
+    #else:
+      #log("FAIL\n")
+    self.Afile.close()
+    self.Bfile.close()
+    removefile(self.Bfn)
+
+
+def ABopenfile(filename, create):
+  return ABFile(filename,create)
+
+
+
+
+# The code here sets up type checking and variable hiding for you.  You
+# should not need to change anything below here.
+sec_file_def = {"obj-type":ABFile,
+                "name":"ABFile",
+                "writeat":{"type":"func","args":(str,int),"exceptions":Exception,"return":(int,type(None)),"target":ABFile.writeat},
+                "readat":{"type":"func","args":((int,type(None)),(int)),"exceptions":Exception,"return":str,"target":ABFile.readat},
+                "close":{"type":"func","args":None,"exceptions":None,"return":(bool,type(None)),"target":ABFile.close}
+           }
+
+CHILD_CONTEXT_DEF["ABopenfile"] = {TYPE:OBJC,ARGS:(str,bool),EXCP:Exception,RETURN:sec_file_def,TARGET:ABopenfile}
+
+# Execute the user code
+secure_dispatch_module()
